@@ -1,4 +1,4 @@
-# Organizicate (Beta v0.7)
+# Organizicate (Beta v0.8)
 
 ![image](https://github.com/user-attachments/assets/ebe94d68-b98e-402a-b223-00c74496e892)
 
@@ -10,6 +10,8 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
 ---
 
 ## Features
+
+![image](https://github.com/user-attachments/assets/61851aad-12ca-42e1-931f-dca48550f736)
 
 - **Organize Files and Folders**
   - Organize a single folder: Move files into subfolders by category.
@@ -48,6 +50,8 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
    - Use the provided `Organizicate.exe` (no Python required).
    - If building yourself, use PyInstaller (see below).
 
+![image](https://github.com/user-attachments/assets/fd28626b-ec38-43c9-a100-70305f132d5d)
+
 2. **Choose an Operation**
    - Select an operation from the dropdown:
      - Organize a single folder
@@ -55,8 +59,12 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
      - Organize all files in a folder (recursive)
      - Organize all folders in a folder
 
+![image](https://github.com/user-attachments/assets/f2d16aba-6eac-483f-ae19-d18500cbfdb0)
+
 3. **Select Path**
    - Enter the full path or use the "Browse" button.
+
+![image](https://github.com/user-attachments/assets/2765e306-b3cb-40c6-a252-3f5ced768594)
 
 4. **Run**
    - Click "Run Operation" to organize.
@@ -114,14 +122,6 @@ You do **not** need Python installed to use the `.exe` version.
 
 ---
 
-## Is the ICO file required?
-
-- **No, the `.ico` file is not required.**
-- If `organizicate.ico` is missing, the app will use a generic icon and still function normally.
-- For best appearance, place `organizicate.ico` in the same folder as the `.exe`.
-
----
-
 ## Requirements
 
 - No Python required for end users if using the `.exe`.
@@ -147,4 +147,4 @@ You do **not** need Python installed to use the `.exe` version.
 
 ## Credits
 
-Programmed and developed by @theAmok.
+Programmed and developed by **@theAmok.**
