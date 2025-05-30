@@ -1,7 +1,6 @@
 # Organizicate (Beta v0.9.2)
 
-![image](https://github.com/user-attachments/assets/56b02bc8-26fc-4a1d-ba47-58b88b10c9f4)
-
+![image](https://github.com/user-attachments/assets/464cb4da-0e26-4c3e-8df8-7caf001369fd)
 
 Organizicate is an open-source Windows desktop app for organizing files and folders by category, with a focus on flexibility and user customization. It uses a rich set of default categories and allows you to add your own. The app is built with Python and Tkinter, and is designed to be packaged as a standalone `.exe` (no Python required for end users).
 
