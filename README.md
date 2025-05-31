@@ -1,7 +1,3 @@
-Here is your **updated README** with all features accurately reflected (including those from your code), DnD references removed, and all sections improved for clarity and completeness:
-
----
-
 # Organizicate (Beta v0.9.2)
 
 ![Organizicate Screenshot](https://github.com/user-attachments/assets/464cb4da-0e26-4c3e-8df8-7caf001369fd)
