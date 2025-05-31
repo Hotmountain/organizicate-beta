@@ -3,8 +3,10 @@ import shutil
 import json
 import threading
 import queue
+from tkinter import ttk
+import ttkbootstrap as ttkb
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkinter import filedialog, messagebox, scrolledtext, simpledialog
 from collections import defaultdict
 import copy
 from typing import Dict, List
@@ -129,7 +131,18 @@ class ToolTip:
     def show_tip(self, event=None):
         if self.tipwindow or not self.text:
             return
-        x, y, cx, cy = self.widget.bbox("insert") if self.widget.winfo_ismapped() else (0,0,0,0)
+        # Fix: Use a safe bbox index for widgets that don't support "insert"
+        try:
+            if self.widget.winfo_ismapped():
+                # Use "insert" for Entry/Text, "active" for Listbox, fallback to (0,0,0,0)
+                if isinstance(self.widget, tk.Listbox):
+                    x, y, width, height = self.widget.bbox("active") or (0, 0, 0, 0)
+                else:
+                    x, y, width, height = self.widget.bbox("insert") or (0, 0, 0, 0)
+            else:
+                x, y, width, height = (0, 0, 0, 0)
+        except Exception:
+            x, y, width, height = (0, 0, 0, 0)
         x = x + self.widget.winfo_rootx() + 25
         y = y + self.widget.winfo_rooty() + 20
         self.tipwindow = tw = tk.Toplevel(self.widget)
@@ -146,18 +159,18 @@ class ToolTip:
         if tw:
             tw.destroy()
 
-class OrganizicateBeta(tk.Tk):
+class OrganizicateBeta(ttkb.Window):
     def __init__(self):
-        super().__init__()
+        super().__init__(themename="superhero")  # or "flatly", "darkly", etc.
         # Set icon using absolute path, handle missing icon gracefully
         try:
             icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "organizicate.ico")
             self.iconbitmap(icon_path)
         except Exception as e:
             print(f"Warning: Could not set window icon: {e}")
-        self.title("Organizicate (Beta v0.8)")
-        self.geometry("820x600")
-        self.resizable(False, False)
+        self.title("Organizicate (Beta v0.9.2)")
+        self.geometry("733x887")  # Set canvas size to 733x785
+        self.resizable(False, False)  # Make window resizable and maximizable
 
         self.recent_actions = []
         self.action_queue = queue.Queue()
@@ -180,11 +193,75 @@ class OrganizicateBeta(tk.Tk):
         self.tray_icon = None
         self.withdrawn_for_tray = False
 
+        self.recent_folders = []
         self.create_widgets()
         self.refresh_category_listbox()
+        # DND support
+        self._setup_dnd()  # <-- DnD setup
+        # Add DnD tooltip to main window
         # For tray support
         if pystray and Image:
             self.protocol("WM_DELETE_WINDOW", self.minimize_to_tray)
+        # Keyboard shortcuts
+        self.bind_all("<Control-n>", lambda e: self.add_cat_btn.invoke())
+        self.bind_all("<Control-s>", lambda e: self.update_cat_btn.invoke())
+        self.bind_all("<Delete>", lambda e: self.delete_cat_btn.invoke())
+        self.bind_all("<Escape>", lambda e: self.clear_category_entries())
+        # Double-click on listbox
+        self.category_listbox.bind("<Double-Button-1>", self.on_category_double_click)
+
+    def _setup_dnd(self):
+        """Enable drag-and-drop for the path entry and window."""
+        try:
+            import tkinterdnd2 as tkdnd  # type: ignore
+            self.tk.call('package', 'require', 'tkdnd')
+            self.dnd_enabled = True
+        except Exception:
+            self.dnd_enabled = False
+            return
+        # Register DND for path_entry
+        try:
+            self.path_entry.drop_target_register(tkdnd.DND_FILES)
+            self.path_entry.dnd_bind('<<Drop>>', self._on_dnd_path)
+            # Visual feedback for drag enter/leave
+            self.path_entry.dnd_bind('<<DragEnter>>', lambda e: self.path_entry.config(background="#e0ffe0"))
+            self.path_entry.dnd_bind('<<DragLeave>>', lambda e: self.path_entry.config(background="white"))
+            self.path_entry.dnd_bind('<<Drop>>', lambda e: self.path_entry.config(background="white"))
+        except Exception:
+            pass
+        # Register DND for main window (optional)
+        try:
+            self.drop_target_register(tkdnd.DND_FILES)
+            self.dnd_bind('<<Drop>>', self._on_dnd_path)
+        except Exception:
+            pass
+
+    def _on_dnd_path(self, event):
+        """Handle file/folder drop on path entry or window."""
+        try:
+            dropped = event.data
+            # Remove curly braces if present (Windows)
+            if dropped.startswith('{') and dropped.endswith('}'):
+                dropped = dropped[1:-1]
+            # Support multiple files/folders
+            paths = self.tk.splitlist(dropped)
+            if paths:
+                path = paths[0]
+                self.path_entry.delete(0, 'end')
+                self.path_entry.insert(0, path)
+                if os.path.isdir(path):
+                    self.add_recent_folder(path)
+                elif os.path.isfile(path):
+                    self.add_recent_folder(os.path.dirname(path))
+        except Exception as e:
+            messagebox.showerror("DND Error", f"Failed to process dropped item: {e}")
+
+    def on_recent_folder_selected(self, event):
+        """Set the path entry to the selected recent folder."""
+        selected = self.recent_folders_combo.get()
+        if selected:
+            self.path_entry.delete(0, 'end')
+            self.path_entry.insert(0, selected)
 
     def reload_categories(self):
         self.file_categories = load_categories()
@@ -200,10 +277,6 @@ class OrganizicateBeta(tk.Tk):
         # Main frame
         main_frame = ttk.Frame(self)
         main_frame.pack(fill='both', expand=True, padx=10, pady=10)
-
-        ttk.Button(main_frame, text="Reload Categories", command=self.reload_categories).grid(row=0, column=1, sticky='e', padx=10)
-        reload_btn = main_frame.winfo_children()[-1]
-        ToolTip(reload_btn, "Reload categories from disk")
 
         # --- Operation Section ---
         ttk.Label(main_frame, text="Select organization operation:", font=("Arial", 12, "bold")).grid(row=0, column=0, sticky='w')
@@ -222,17 +295,32 @@ class OrganizicateBeta(tk.Tk):
         self.operation_dropdown.grid(row=1, column=0, sticky='w')
         self.operation_dropdown.current(0)
 
-        # Path input
+        # --- Path input with recent folders dropdown ---
         path_frame = ttk.Frame(main_frame)
         path_frame.grid(row=2, column=0, pady=10, sticky='w')
-
         ttk.Label(path_frame, text="Enter the full path:").pack(side='left')
-        self.path_entry = ttk.Entry(path_frame, width=60)
+        self.path_entry = ttk.Entry(path_frame, width=48)
         self.path_entry.pack(side='left', padx=5)
-        ttk.Button(path_frame, text="Browse", command=self.browse_path).pack(side='left')
-        ToolTip(self.path_entry, "Enter the full path to a file or folder")
-        browse_btn = path_frame.winfo_children()[-1]
+        # DND hint
+        ToolTip(self.path_entry, "Enter the full path to a file or folder\n(You can drag and drop the wanted file or folder here)")
+        # Recent folders dropdown
+        self.recent_folders_var = tk.StringVar(value=[])
+        self.recent_folders_combo = ttk.Combobox(path_frame, textvariable=tk.StringVar(), width=10, state="readonly")
+        self.recent_folders_combo.pack(side='left', padx=2)
+        self.recent_folders_combo.bind("<<ComboboxSelected>>", self.on_recent_folder_selected)
+        # Browse button
+        browse_btn = ttk.Button(path_frame, text="Browse", command=self.browse_path)
+        browse_btn.pack(side='left')
         ToolTip(browse_btn, "Browse for a file or folder")
+        # About button (next to Browse)
+        about_btn = ttk.Button(path_frame, text="About", command=self.show_about)
+        about_btn.pack(side='left', padx=(5,0))
+        ToolTip(about_btn, "About Organizicate")
+
+        # --- Dark Mode Toggle Button ---
+        # dark_btn = ttk.Button(path_frame, text="Toggle Dark Mode", command=self.toggle_dark_mode)
+        # dark_btn.pack(side='left', padx=(5,0))
+        # ToolTip(dark_btn, "Switch between light and dark mode")
 
         # Run, Clear, Undo, Export, Import buttons
         btn_frame = ttk.Frame(main_frame)
@@ -271,10 +359,14 @@ class OrganizicateBeta(tk.Tk):
 
         # --- Category Manager Section ---
         cat_frame = ttk.LabelFrame(main_frame, text="Manage Categories (Add/Edit/Delete User Categories)", padding=10)
-        cat_frame.grid(row=6, column=0, pady=15, sticky='ew')
-        cat_frame.columnconfigure(1, weight=1)
+        cat_frame.grid(row=6, column=0, pady=15, sticky='nsew')
+        cat_frame.columnconfigure(0, weight=0)
+        cat_frame.columnconfigure(1, weight=0)
+        for i in range(6):
+            cat_frame.rowconfigure(i, weight=0)
+        cat_frame.rowconfigure(2, weight=1)  # Let the listbox row expand
 
-        # --- Search/Filter Entry ---
+        # --- Search/Filter Entry with clear button ---
         search_frame = ttk.Frame(cat_frame)
         search_frame.grid(row=0, column=0, columnspan=2, sticky='ew', pady=(0,5))
         ttk.Label(search_frame, text="Search:").pack(side='left')
@@ -283,50 +375,66 @@ class OrganizicateBeta(tk.Tk):
         search_entry.pack(side='left', padx=3)
         ToolTip(search_entry, "Type to filter categories")
         self.cat_search_var.trace_add("write", lambda *a: self.refresh_category_listbox())
+        # Quick clear button
+        clear_btn = ttk.Button(search_frame, text="X", width=2, command=lambda: self.cat_search_var.set(""))
+        clear_btn.pack(side='left', padx=2)
+        ToolTip(clear_btn, "Clear search")
 
-        # Category listbox with frame for better layout
+        # --- Category Control Buttons (move to top right) ---
+        btn_cat_frame = ttk.Frame(cat_frame)
+        btn_cat_frame.grid(row=1, column=1, sticky='w', pady=(0, 5))
+        self.add_cat_btn = ttk.Button(btn_cat_frame, text="Add New Category", command=self.add_category)
+        self.add_cat_btn.pack(side='left', padx=5)
+        ToolTip(self.add_cat_btn, "Add a new user category (Ctrl+N)")
+        self.update_cat_btn = ttk.Button(btn_cat_frame, text="Update Category", command=self.update_category, state='disabled')
+        self.update_cat_btn.pack(side='left', padx=5)
+        ToolTip(self.update_cat_btn, "Update the selected category (Ctrl+S)")
+        self.delete_cat_btn = ttk.Button(btn_cat_frame, text="Delete Category", command=self.delete_category, state='disabled')
+        self.delete_cat_btn.pack(side='left', padx=5)
+        ToolTip(self.delete_cat_btn, "Delete the selected user category (Del)")
+        # Copy extensions button
+        self.copy_ext_btn = ttk.Button(btn_cat_frame, text="Copy Ext", command=self.copy_extensions, state='disabled')
+        self.copy_ext_btn.pack(side='left', padx=5)
+        ToolTip(self.copy_ext_btn, "Copy extensions to clipboard")
+
+        # --- Category listbox with frame for better layout ---
         listbox_frame = ttk.Frame(cat_frame)
-        listbox_frame.grid(row=1, column=0, rowspan=4, sticky='nsew', padx=(0, 10))
-        
+        listbox_frame.grid(row=1, column=0, rowspan=7, sticky='nsew', padx=(0, 10))
+        listbox_frame.rowconfigure(0, weight=1)
+        listbox_frame.columnconfigure(0, weight=1)
         self.category_listbox = tk.Listbox(listbox_frame, height=8, width=25)
         self.category_listbox.pack(side='left', fill='both', expand=True)
         self.category_listbox.bind("<<ListboxSelect>>", self.on_category_select)
-        ToolTip(self.category_listbox, "List of categories")
-
-        # Scrollbar for listbox
+        ToolTip(self.category_listbox, "List of categories (double-click to edit)")
         scrollbar = ttk.Scrollbar(listbox_frame, orient="vertical", command=self.category_listbox.yview)
         scrollbar.pack(side='right', fill='y')
         self.category_listbox.config(yscrollcommand=scrollbar.set)
 
-        # Entry for category name
-        ttk.Label(cat_frame, text="Category Name:").grid(row=1, column=1, sticky='w')
+        # --- Entry for category name ---
+        ttk.Label(cat_frame, text="Category Name:").grid(row=2, column=1, sticky='w')
         self.cat_name_var = tk.StringVar()
         self.cat_name_entry = ttk.Entry(cat_frame, textvariable=self.cat_name_var, width=40)
-        self.cat_name_entry.grid(row=2, column=1, sticky='ew', pady=3)
+        self.cat_name_entry.grid(row=3, column=1, sticky='ew', pady=3)
         ToolTip(self.cat_name_entry, "Enter or edit the category name")
 
-        # Entry for extensions (comma separated)
-        ttk.Label(cat_frame, text="Extensions (comma separated, with dot):").grid(row=3, column=1, sticky='w')
+        # --- Entry for extensions (comma separated) ---
+        ttk.Label(cat_frame, text="Extensions (comma separated, with dot):").grid(row=4, column=1, sticky='w')
         self.cat_ext_var = tk.StringVar()
         self.cat_ext_entry = ttk.Entry(cat_frame, textvariable=self.cat_ext_var, width=40)
-        self.cat_ext_entry.grid(row=4, column=1, sticky='ew', pady=3)
+        self.cat_ext_entry.grid(row=5, column=1, sticky='ew', pady=3)
         ToolTip(self.cat_ext_entry, "Enter extensions, e.g. .txt, .pdf")
 
-        # Buttons Add / Update / Delete
-        btn_cat_frame = ttk.Frame(cat_frame)
-        btn_cat_frame.grid(row=5, column=1, sticky='w', pady=5)
+        # --- Category description field (user categories only) ---
+        ttk.Label(cat_frame, text="Description (optional):").grid(row=6, column=1, sticky='w')
+        self.cat_desc_var = tk.StringVar()
+        self.cat_desc_entry = ttk.Entry(cat_frame, textvariable=self.cat_desc_var, width=40)
+        self.cat_desc_entry.grid(row=7, column=1, sticky='ew', pady=3)
+        ToolTip(self.cat_desc_entry, "Optional description for user categories")
 
-        self.add_cat_btn = ttk.Button(btn_cat_frame, text="Add New Category", command=self.add_category)
-        self.add_cat_btn.pack(side='left', padx=5)
-        ToolTip(self.add_cat_btn, "Add a new user category")
-
-        self.update_cat_btn = ttk.Button(btn_cat_frame, text="Update Category", command=self.update_category, state='disabled')
-        self.update_cat_btn.pack(side='left', padx=5)
-        ToolTip(self.update_cat_btn, "Update the selected category (including renaming default categories)")
-
-        self.delete_cat_btn = ttk.Button(btn_cat_frame, text="Delete Category", command=self.delete_category, state='disabled')
-        self.delete_cat_btn.pack(side='left', padx=5)
-        ToolTip(self.delete_cat_btn, "Delete the selected user category")
+        # --- Extension count label ---
+        self.ext_count_var = tk.StringVar(value="")
+        self.ext_count_label = ttk.Label(cat_frame, textvariable=self.ext_count_var, foreground="gray")
+        self.ext_count_label.grid(row=8, column=1, sticky='w', pady=(0, 3))
 
         # --- Status Bar ---
         self.status_var = tk.StringVar()
@@ -364,9 +472,13 @@ class OrganizicateBeta(tk.Tk):
         if not sel:
             self.cat_name_var.set("")
             self.cat_ext_var.set("")
+            self.cat_desc_var.set("")
+            self.ext_count_var.set("")
             self.update_cat_btn.config(state='disabled')
             self.delete_cat_btn.config(state='disabled')
             self.add_cat_btn.config(state='normal')
+            self.copy_ext_btn.config(state='disabled')
+            self.cat_ext_entry.config(state='normal')
             return
         
         idx = sel[0]
@@ -375,23 +487,35 @@ class OrganizicateBeta(tk.Tk):
         self.cat_name_var.set(cat_name)
         exts = self.file_categories.get(cat_name, [])
         self.cat_ext_var.set(", ".join(exts))
-
-        # Enable/disable buttons based on default or user category
+        self.ext_count_var.set(f"Extension count: {len(exts)}")
+        self.copy_ext_btn.config(state='normal')
+        # Description: only for user categories
         if cat_name in self.default_categories:
-            self.update_cat_btn.config(state='normal')  # Allow renaming default
+            self.cat_desc_var.set("")
+            self.cat_desc_entry.config(state='disabled')
+            self.update_cat_btn.config(state='normal')
             self.delete_cat_btn.config(state='disabled')
             self.add_cat_btn.config(state='normal')
-            self.cat_ext_entry.config(state='disabled')  # Can't edit extensions for default
+            self.cat_ext_entry.config(state='disabled')
             ToolTip(self.update_cat_btn, "Rename default categories (extensions not editable)")
         else:
+            self.cat_desc_entry.config(state='normal')
+            self.cat_desc_var.set(getattr(self, "user_category_desc", {}).get(cat_name, ""))
             self.update_cat_btn.config(state='normal')
             self.delete_cat_btn.config(state='normal')
             self.add_cat_btn.config(state='disabled')
             self.cat_ext_entry.config(state='normal')
 
+    def on_category_double_click(self, event):
+        sel = self.category_listbox.curselection()
+        if sel:
+            self.cat_name_entry.focus_set()
+            self.cat_name_entry.selection_range(0, tk.END)
+
     def add_category(self):
         name = self.cat_name_var.get().strip()
         exts = self.cat_ext_var.get().strip()
+        desc = self.cat_desc_var.get().strip()
         if not name:
             messagebox.showerror("Error", "Category name cannot be empty.")
             return
@@ -402,8 +526,20 @@ class OrganizicateBeta(tk.Tk):
         if not ext_list:
             messagebox.showerror("Error", "Please enter at least one valid extension (e.g. .txt).")
             return
-        
+        # Category conflict warning
+        conflicts = self._find_extension_conflicts(ext_list)
+        if conflicts:
+            msg = "Warning: The following extensions are already assigned to other categories:\n"
+            msg += "\n".join([f"{ext}: {cat}" for ext, cat in conflicts.items()])
+            msg += "\n\nDo you want to continue?"
+            if not messagebox.askyesno("Extension Conflict", msg):
+                return
         self.file_categories[name] = ext_list
+        # Save description for user categories
+        if not hasattr(self, "user_category_desc"):
+            self.user_category_desc = {}
+        if desc:
+            self.user_category_desc[name] = desc
         save_categories(self.file_categories)
         self.extension_to_category = build_extension_map(self.file_categories)
         self.refresh_category_listbox()
@@ -416,29 +552,22 @@ class OrganizicateBeta(tk.Tk):
         if not sel:
             messagebox.showwarning("Warning", "No category selected to update.")
             return
-        
         idx = sel[0]
         old_name_with_suffix = self.category_listbox.get(idx)
         old_name = old_name_with_suffix.replace(" (default)", "")
-        
         new_name = self.cat_name_var.get().strip()
         exts = self.cat_ext_var.get().strip()
-        
+        desc = self.cat_desc_var.get().strip()
         if not new_name:
             messagebox.showerror("Error", "Category name cannot be empty.")
             return
-        
-        # If new_name is different and exists, error
         if new_name != old_name and new_name in self.file_categories:
             messagebox.showerror("Error", f"Category '{new_name}' already exists.")
             return
-
-        # For default categories, allow renaming but not editing extensions
         if old_name in self.default_categories:
             if new_name == old_name:
                 messagebox.showinfo("Info", "No changes to update.")
                 return
-            # Rename default category
             self.file_categories[new_name] = self.file_categories.pop(old_name)
             self.default_categories.remove(old_name)
             self.default_categories.add(new_name)
@@ -449,9 +578,27 @@ class OrganizicateBeta(tk.Tk):
             if not ext_list:
                 messagebox.showerror("Error", "Please enter at least one valid extension (e.g. .txt).")
                 return
+            # Category conflict warning (ignore current category)
+            conflicts = self._find_extension_conflicts(ext_list, ignore_category=old_name)
+            if conflicts:
+                msg = "Warning: The following extensions are already assigned to other categories:\n"
+                msg += "\n".join([f"{ext}: {cat}" for ext, cat in conflicts.items()])
+                msg += "\n\nDo you want to continue?"
+                if not messagebox.askyesno("Extension Conflict", msg):
+                    return
             if new_name != old_name:
                 self.file_categories.pop(old_name)
+                # Move description if exists
+                if hasattr(self, "user_category_desc") and old_name in self.user_category_desc:
+                    self.user_category_desc[new_name] = self.user_category_desc.pop(old_name)
             self.file_categories[new_name] = ext_list
+            # Save description for user categories
+            if not hasattr(self, "user_category_desc"):
+                self.user_category_desc = {}
+            if desc:
+                self.user_category_desc[new_name] = desc
+            elif new_name in self.user_category_desc:
+                del self.user_category_desc[new_name]
             self.log(f"Updated category '{old_name}' to '{new_name}' with extensions: {', '.join(ext_list)}")
             self.status_var.set(f"Updated category '{new_name}'")
         save_categories(self.file_categories)
@@ -485,9 +632,14 @@ class OrganizicateBeta(tk.Tk):
     def clear_category_entries(self):
         self.cat_name_var.set("")
         self.cat_ext_var.set("")
+        self.cat_desc_var.set("")
+        self.ext_count_var.set("")
         self.add_cat_btn.config(state='normal')
         self.update_cat_btn.config(state='disabled')
         self.delete_cat_btn.config(state='disabled')
+        self.copy_ext_btn.config(state='disabled')
+        self.cat_ext_entry.config(state='normal')
+        self.cat_desc_entry.config(state='normal')
         self.category_listbox.selection_clear(0, 'end')
 
     def add_recent_action(self, message):
@@ -511,11 +663,23 @@ class OrganizicateBeta(tk.Tk):
             if folder:
                 self.path_entry.delete(0, 'end')
                 self.path_entry.insert(0, folder)
+                self.add_recent_folder(folder)
         elif op == 2:  # Single file
             file = filedialog.askopenfilename()
             if file:
                 self.path_entry.delete(0, 'end')
                 self.path_entry.insert(0, file)
+                folder = os.path.dirname(file)
+                self.add_recent_folder(folder)
+
+    def add_recent_folder(self, folder):
+        if not hasattr(self, "recent_folders"):
+            self.recent_folders = []
+        if folder and folder not in self.recent_folders:
+            self.recent_folders.insert(0, folder)
+            if len(self.recent_folders) > 10:
+                self.recent_folders = self.recent_folders[:10]
+            self.recent_folders_combo["values"] = self.recent_folders
 
     def clear_output(self):
         self.output_text.config(state='normal')
@@ -537,7 +701,9 @@ class OrganizicateBeta(tk.Tk):
         summary_lines = ["Summary of moved items:"]
         for cat, count in sorted(count_moved.items()):
             summary_lines.append(f"  {cat}: {count}")
-        self.log("\n".join(summary_lines))
+        summary = "\n".join(summary_lines)
+        self.log(summary)
+        return summary
 
     def run_operation(self):
         path = self.path_entry.get().strip()
@@ -553,9 +719,15 @@ class OrganizicateBeta(tk.Tk):
         if self.operation_thread and self.operation_thread.is_alive():
             messagebox.showwarning("Warning", "An operation is already running.")
             return
+        def safe_run():
+            try:
+                self._run_operation_thread(op, path)
+            except Exception as e:
+                self.action_queue.put(("status", "Error occurred."))
+                self.action_queue.put(("log", f"Error: {e}"))
+                messagebox.showerror("Operation Error", f"An error occurred:\n{e}")
         self.operation_thread = threading.Thread(
-            target=self._run_operation_thread,
-            args=(op, path),
+            target=safe_run,
             daemon=True
         )
         self.operation_thread.start()
@@ -605,10 +777,11 @@ class OrganizicateBeta(tk.Tk):
 
     def organize_single_folder(self, folder_path):
         if not os.path.isdir(folder_path):
-            raise ValueError(f"'{folder_path}' is not a valid folder path.")
+            raise ValueError(f"\n'{folder_path}' is not a valid folder path.")
+        # Only move files in the top-level folder, do not touch subfolders or their contents
         files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
         if not files:
-            self.log("No files found in the folder.")
+            self.log("\nNo files found in the folder.")
             return
         count_moved = defaultdict(int)
         undo_ops = []
@@ -619,18 +792,18 @@ class OrganizicateBeta(tk.Tk):
             dst = os.path.join(dest_folder, file)
             try:
                 shutil.move(src, dst)
-                self.log(f"Moved file '{file}' to folder '{category}'.")
+                self.log(f"\nMoved file '{file}' to folder '{category}'.")
                 count_moved[category] += 1
                 undo_ops.append((src, dst))
             except Exception as e:
-                self.log(f"Failed to move '{file}': {e}")
+                self.log(f"\nFailed to move '{file}': {e}")
         if undo_ops:
             self.undo_stack.append(undo_ops)
         self.log_summary(count_moved)
 
     def organize_single_file(self, file_path):
         if not os.path.isfile(file_path):
-            raise ValueError(f"'{file_path}' is not a valid file.")
+            raise ValueError(f"'\n{file_path}' is not a valid file.")
         folder_path = os.path.dirname(file_path)
         file_name = os.path.basename(file_path)
         category = self.get_category_for_file(file_name)
@@ -638,12 +811,14 @@ class OrganizicateBeta(tk.Tk):
         dst = os.path.join(dest_folder, file_name)
         undo_ops = []
         try:
+            self.log(f"\nMoved file '{file_name}' to folder '{category}'.")
             shutil.move(file_path, dst)
-            self.log(f"Moved file '{file_name}' to folder '{category}'.")
             self.log_summary({category: 1})
             undo_ops.append((file_path, dst))
+        except PermissionError as e:
+            self.log(f"\nPermission denied: '{file_name}'. Skipped. ({e})")
         except Exception as e:
-            self.log(f"Failed to move '{file_name}': {e}")
+            self.log(f"\nFailed to move '{file_name}': {e}")
         if undo_ops:
             self.undo_stack.append(undo_ops)
 
@@ -652,39 +827,55 @@ class OrganizicateBeta(tk.Tk):
             raise ValueError(f"'{folder_path}' is not a valid folder path.")
         count_moved = defaultdict(int)
         undo_ops = []
-        for root, dirs, files in os.walk(folder_path):
-            for file in files:
-                src = os.path.join(root, file)
-                category = self.get_category_for_file(file)
-                dest_folder = self.ensure_folder(root, category)  # Use root, not folder_path
-                dst = os.path.join(dest_folder, file)
-                if os.path.abspath(src) == os.path.abspath(dst):
-                    continue  # skip if same file
-                try:
-                    shutil.move(src, dst)
-                    self.action_queue.put(("log", f"Moved file '{file}' to folder '{category}'."))
-                    count_moved[category] += 1
-                    undo_ops.append((src, dst))
-                except Exception as e:
-                    self.action_queue.put(("log", f"Failed to move '{file}': {e}"))
+        # Only process files in the top-level folder, not recursively
+        files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        for file in files:
+            src = os.path.join(folder_path, file)
+            category = self.get_category_for_file(file)
+            dest_folder = self.ensure_folder(folder_path, category)
+            dst = os.path.join(dest_folder, file)
+            if os.path.abspath(src) == os.path.abspath(dst):
+                continue  # skip if same file
+            try:
+                shutil.move(src, dst)
+                self.action_queue.put(("log", f"Moved file '{file}' to folder '{category}'."))
+                count_moved[category] += 1
+                undo_ops.append((src, dst))
+            except PermissionError as e:
+                self.action_queue.put(("log", f"Permission denied: '{file}'. Skipped. ({e})"))
+            except Exception as e:
+                self.action_queue.put(("log", f"Failed to move '{file}': {e}"))
         if undo_ops:
             self.undo_stack.append(undo_ops)
-        self.action_queue.put(("log", self._format_log_summary(count_moved)))
+        # Fix: Use log_summary instead of _format_log_summary
+        self.action_queue.put(("log", self.log_summary(count_moved)))
 
     def organize_all_folders_in_folder(self, folder_path):
         if not os.path.isdir(folder_path):
             raise ValueError(f"'{folder_path}' is not a valid folder path.")
         count_moved = 0
         undo_ops = []
+        # Only move top-level folders, do not move or touch their contents
         for item in os.listdir(folder_path):
             item_path = os.path.join(folder_path, item)
             if os.path.isdir(item_path):
+                try:
+                    # Try to access the folder to avoid permission errors early
+                    os.listdir(item_path)
+                except PermissionError as e:
+                    self.action_queue.put(("log", f"Permission denied: '{item}'. Skipped. ({e})"))
+                    continue
+                except Exception as e:
+                    self.action_queue.put(("log", f"Failed to access folder '{item}': {e}"))
+                    continue
+                # Do not move folders that are already in a category folder
                 category = self.get_category_for_folder(item_path)
                 dest_folder = self.ensure_folder(folder_path, category)
                 dst = os.path.join(dest_folder, item)
                 if os.path.abspath(item_path) == os.path.abspath(dst):
                     continue
                 try:
+                    # Prevent moving a folder into itself or its subfolders
                     common = os.path.commonpath([os.path.abspath(item_path), os.path.abspath(dst)])
                     if common == os.path.abspath(item_path):
                         continue
@@ -695,11 +886,31 @@ class OrganizicateBeta(tk.Tk):
                     self.action_queue.put(("log", f"Moved folder '{item}' to folder '{category}'."))
                     count_moved += 1
                     undo_ops.append((item_path, dst))
+                except PermissionError as e:
+                    self.action_queue.put(("log", f"Permission denied: '{item}'. Skipped. ({e})"))
                 except Exception as e:
                     self.action_queue.put(("log", f"Failed to move folder '{item}': {e}"))
         if undo_ops:
             self.undo_stack.append(undo_ops)
         self.action_queue.put(("log", f"Moved {count_moved} folders."))
+
+    def get_category_for_folder(self, folder_path):
+        """Categorize a folder based on its contents."""
+        files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
+        if not files:
+            return "Empty"
+        cat_count = defaultdict(int)
+        for file in files:
+            cat = self.get_category_for_file(file)
+            cat_count[cat] += 1
+        if not cat_count:
+            return "Other"
+        if len(cat_count) == 1:
+            return next(iter(cat_count))
+        most_common = max(cat_count.items(), key=lambda x: x[1])
+        if most_common[1] > len(files) // 2:
+            return most_common[0]
+        return "Mixed"
 
     # --- Export/Import Categories ---
     def export_categories(self):
@@ -794,38 +1005,48 @@ class OrganizicateBeta(tk.Tk):
             self.tray_icon = None
         super().destroy()
 
-# Lines 350-368 (example)
-def categorize_file(filename, extension_to_category):
-    ext = os.path.splitext(filename)[1].lower()
-    return extension_to_category.get(ext, "Other")
+    def copy_extensions(self):
+        """Copy the extensions of the selected category to the clipboard."""
+        sel = self.category_listbox.curselection()
+        if not sel:
+            return
+        idx = sel[0]
+        cat_name_with_suffix = self.category_listbox.get(idx)
+        cat_name = cat_name_with_suffix.replace(" (default)", "")
+        exts = self.file_categories.get(cat_name, [])
+        ext_str = ", ".join(exts)
+        self.clipboard_clear()
+        self.clipboard_append(ext_str)
+        self.status_var.set(f"Copied extensions for '{cat_name}' to clipboard.")
 
-def categorize_folder(folder_path, extension_to_category):
-    if not os.path.isdir(folder_path):
-        return "Other"
-    files = [f for f in os.listdir(folder_path) if os.path.isfile(os.path.join(folder_path, f))]
-    if not files:
-        return "Empty"
-    cat_count = defaultdict(int)
-    for file in files:
-        cat = categorize_file(file, extension_to_category)
-        cat_count[cat] += 1
-    if not cat_count:
-        return "Other"
-    if len(cat_count) == 1:
-        return next(iter(cat_count))
-    most_common = max(cat_count.items(), key=lambda x: x[1])
-    if most_common[1] > len(files) // 2:
-        return most_common[0]
-    return "Mixed"
+    def show_about(self):
+        """Show About dialog."""
+        messagebox.showinfo(
+            "About Organizicate",
+            "Organizicate (Beta v0.8.2)\n\n"
+            "A smart file/folder organizer.\n"
+            "Drag and drop supported.\n"
+            "\nDeveloped by @theAmok.\n"
+            "https://github.com/Hotmountain/organizicate-beta\n"
+        )
 
-# Main execution
+# --- Advanced run block ---
 if __name__ == "__main__":
-    try:
-        app = OrganizicateBeta()
-        app.mainloop()
-    except KeyboardInterrupt:
-        print("\nProgram interrupted by user.")
-    except Exception as e:
-        print(f"An unexpected error occurred: {e}")
-    finally:
-        print("Program ended.")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Organizicate - Smart file/folder organizer")
+    parser.add_argument("--debug", action="store_true", help="Enable debug output")
+    parser.add_argument("--config", type=str, default=CONFIG_FILE, help="Path to config file (default: config.json)")
+    args = parser.parse_args()
+
+    if args.config != CONFIG_FILE:
+        CONFIG_FILE = args.config
+
+    if args.debug:
+        print("Debug mode enabled")
+        print(f"Using config file: {CONFIG_FILE}")
+
+    app = OrganizicateBeta()
+    if args.debug:
+        app.log("Debug mode is ON")
+    app.mainloop()
