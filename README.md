@@ -1,3 +1,7 @@
+Here is your **updated README** with all features accurately reflected (including those from your code), DnD references removed, and all sections improved for clarity and completeness:
+
+---
+
 # Organizicate (Beta v0.9.2)
 
 ![Organizicate Screenshot](https://github.com/user-attachments/assets/464cb4da-0e26-4c3e-8df8-7caf001369fd)
@@ -11,7 +15,7 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
 
 ## Features
 
-![Features Screenshot](https://github.com/user-attachments/assets/61851aad-12ca-42e1-931f-dca48550f736)
+![Features Screenshot](https://github.com/user-attachments/assets/bc63b10a-fd26-4eee-a9eb-10d9de140aa7)
 
 - **Organize Files and Folders**
   - Organize a single folder: Move files into subfolders by category.
@@ -25,6 +29,9 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
   - Assign multiple extensions to each category (supports multi-dot extensions, e.g., `.tar.gz`).
   - Search/filter categories in the manager.
   - Optional description field for user categories.
+  - Extension count display for each category.
+  - Copy extensions to clipboard with a single click.
+  - Double-click a category to quickly edit its name.
 
 - **Export/Import Categories**
   - Export your custom categories to a JSON file.
@@ -43,9 +50,6 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
 - **Tooltips**
   - Helpful tooltips for all buttons and fields.
 
-- **Drag and Drop Support**
-  - Drag and drop files or folders into the path entry or main window (requires `tkinterdnd2`).
-
 - **Recent Folders Dropdown**
   - Quickly access up to 10 recently used folders.
 
@@ -55,9 +59,17 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
   - `Delete`: Delete category
   - `Esc`: Clear category entry fields
 
+- **Status Bar**
+  - See current status messages and operation results at the bottom of the window.
+
+- **About Dialog**
+  - Quick access to app info and credits.
+
 ---
 
 ## How to Use
+
+![Tutorial Image](https://github.com/user-attachments/assets/7fc01297-7859-4a8c-a975-c7db91515b21)
 
 1. **Download and Run**
    - Use the provided `Organizicate.exe` (no Python required).
@@ -71,7 +83,7 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
      - Organize all folders in a folder
 
 3. **Select Path**
-   - Enter the full path, drag and drop, or use the "Browse" button.
+   - Enter the full path or use the "Browse" button.
    - Use the recent folders dropdown for quick access.
 
 4. **Run**
@@ -95,6 +107,9 @@ Organizicate is an open-source Windows desktop app for organizing files and fold
 9. **System Tray Minimization** *(Experimental/Beta)*
    - Closing the window minimizes the app to the tray (if dependencies are included).
    - Right-click the tray icon to restore or exit.
+
+10. **About**
+    - Click the "About" button for app info and credits.
 
 ---
 
@@ -137,10 +152,9 @@ You do **not** need Python installed to use the `.exe` version.
 - If running from source: Python 3.8+ and the following packages:
   - `ttkbootstrap` (for modern UI)
   - `pystray`, `Pillow` (for tray support, optional)
-  - `tkinterdnd2` (for drag-and-drop, optional)
   - Install with:
     ```
-    pip install ttkbootstrap pystray pillow tkinterdnd2
+    pip install ttkbootstrap pystray pillow
     ```
 
 ---
@@ -150,7 +164,6 @@ You do **not** need Python installed to use the `.exe` version.
 - **Default categories** are not editable except for renaming.
 - **Undo** only works for the last move operation.
 - **System tray** feature is experimental and may not work on all systems.
-- **Drag and drop** requires `tkinterdnd2` (optional).
 - The app is in **Beta**: Please report bugs or unexpected behavior to the email above.
 - The app **might not** organize your files the way you want. Please test it first!
 - This app is **completely free** and **open-source.** Please mention my username if you use it for commercial purposes.
@@ -163,7 +176,8 @@ Programmed and developed by **@theAmok**.
 
 ---
 
-**Missing or planned features:**
+## Missing or Planned Features
+
 - Recursive organization of subfolders (currently only top-level files/folders are organized).
 - Multi-level undo.
 - More advanced category rules (by file name, size, date, etc.).
@@ -171,44 +185,21 @@ Programmed and developed by **@theAmok**.
 - Per-category descriptions are not saved to disk yet.
 
 ---
-
-**Contact:** kerogergesazmy@gmail.com  
-**GitHub:** https://github.com/Hotmountain/organizicate-beta
-
----
-
-Let me know if you want this as a Markdown file or need further details!---
 
 ## Notes
 
 - **Default categories** are not editable except for renaming.
 - **Undo** only works for the last move operation.
 - **System tray** feature is experimental and may not work on all systems.
-- **Drag and drop** requires `tkinterdnd2` (optional).
 - The app is in **Beta**: Please report bugs or unexpected behavior to the email above.
 - The app **might not** organize your files the way you want. Please test it first!
 - This app is **completely free** and **open-source.** Please mention my username if you use it for commercial purposes.
 
 ---
 
-## Credits
-
-Programmed and developed by **@theAmok**.
-
----
-
-**Missing or planned features:**
-- Recursive organization of subfolders (currently only top-level files/folders are organized).
-- Multi-level undo.
-- More advanced category rules (by file name, size, date, etc.).
-- Dark mode toggle (UI support present but not enabled).
-- Per-category descriptions are not saved to disk yet.
-
----
-
 **Contact:** kerogergesazmy@gmail.com  
 **GitHub:** https://github.com/Hotmountain/organizicate-beta
 
----
+## Credits
 
-Let me know if you want this as a Markdown file or need further details!
+Programmed and developed by **@theAmok**.
