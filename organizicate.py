@@ -15,7 +15,9 @@ import sys
 try:
     import pystray  # type: ignore
     from PIL import Image  # type: ignore
-except ImportError:
+except ImportError as e:
+    if "PIL" in str(e):
+        print("Error: The 'Pillow' package is required. Please install it with 'pip install pillow'.")
     pystray = None
     Image = None
 
@@ -159,12 +161,20 @@ class ToolTip:
         if tw:
             tw.destroy()
 
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
+
 class OrganizicateBeta(ttkb.Window):
     def __init__(self):
-        super().__init__(themename="superhero")  # or "flatly", "darkly", etc.
-        # Set icon using absolute path, handle missing icon gracefully
+        super().__init__(themename="superhero")
         try:
-            icon_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "organizicate.ico")
+            icon_path = resource_path("organizicate.ico")
             self.iconbitmap(icon_path)
         except Exception as e:
             print(f"Warning: Could not set window icon: {e}")
